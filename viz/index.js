@@ -1,6 +1,11 @@
+const _ = require('lodash')
 const resl = require('resl')
 const css = require('dom-css')
 const fit = require('canvas-fit')
+const d3scales = require('d3-scale')
+const d3chromatic = require('d3-scale-chromatic')
+const d3color = require('d3-color')
+const hexrgb = require('hex-rgb')
 const control = require('control-panel')
 
 // setup canvas and camera
@@ -15,25 +20,6 @@ const drawSpots = require('./draw/spots')(regl)
 const drawRegions = require('./draw/regions')(regl)
 const drawOutlines = require('./draw/outlines')(regl)
 
-// setup control panel and state
-var state = {
-  color: [0.6, 0.2, 0.9],
-  showSpots: true,
-  showRegions: true
-}
-var panel = control([
-  {type: 'color', label: 'dot color', format: 'array', initial: state.color},
-  {type: 'checkbox', label: 'show spots', initial: state.showSpots},
-  {type: 'checkbox', label: 'show regions', initial: state.showRegions}
-],
-  {theme: 'dark', position: 'top-left'}
-)
-panel.on('input', function (data) {
-  state.color = typeof(data['dot color']) == 'string' ? state.color : data['dot color']
-  state.showSpots = data['show spots']
-  state.showRegions = data['show regions']
-})
-
 // load assets and draw
 resl({
   manifest: {
@@ -44,7 +30,7 @@ resl({
 
     'spots': {
       type: 'text',
-      src: '../example_2/spots.json',
+      src: '../example_2/spots_decoded.json',
       parser: JSON.parse
     },
 
@@ -61,6 +47,38 @@ resl({
     const scale = height/width
     const texture = regl.texture(background)
 
+    const counts = _.map(_.countBy(spots, 'properties.gene'), 
+      function (k, v) {return {gene: v, count: k}})
+    const top = _.map(_.orderBy(counts, 'count', 'desc'), 
+      function (k) {return k.gene}).slice(1,10)
+
+    // setup control panel and state
+    var state = {
+      showSpots: true,
+      showRegions: true
+    }
+    var inputs = [
+      {type: 'checkbox', label: 'show spots', initial: state.showSpots},
+      {type: 'checkbox', label: 'show regions', initial: state.showRegions}
+    ]
+
+    top.forEach(function (d) {
+      state[d] = true
+      inputs.push({type: 'checkbox', label: d, initial: true})
+    })
+
+    var panel = control(inputs,
+      {theme: 'dark', position: 'top-left'}
+    )
+    panel.on('input', function (data) {
+      state.showSpots = data['show spots']
+      state.showRegions = data['show regions']
+      top.forEach(function (d) {
+        state[d] = data[d]
+      })
+      colors = getcolors(spots)
+    })
+
     var xy
     const positions = spots.map(function (spot) {
       xy = spot.geometry.coordinates
@@ -73,6 +91,27 @@ resl({
       })
     })
 
+    const sizes = spots.map(function (spot) {
+      return spot.properties.radius
+    })
+
+    const colorscale = d3scales.scaleOrdinal(d3chromatic.schemeAccent)
+      .domain(top).unknown('#939393')
+
+    const getcolors = function (spots) {
+      var base, scaled
+      return spots.map(function (spot) {
+        if (!state[spot.properties.gene]) {
+          base = '#939393'
+        } else {
+          base = colorscale(spot.properties.gene)
+        }
+        scaled = d3color.color(base).darker(spot.properties.qual)
+        return [scaled.r/255, scaled.g/255, scaled.b/255]
+      })
+    }
+    var colors = getcolors(spots)
+
     regl.frame(() => {
       regl.clear({
         depth: 1,
@@ -82,7 +121,8 @@ resl({
       if (state.showSpots) {
         drawSpots({
           distance: camera.distance, 
-          color: state.color,
+          colors: colors,
+          sizes: sizes,
           positions: positions,
           count: positions.length,
           view: camera.view(),
@@ -100,7 +140,7 @@ resl({
         drawRegions(vertices.map(function (v) {
           return {
             distance: camera.distance, 
-            color: state.color,
+            color: [0.3, 0.3, 0.3],
             vertices: v,
             count: v.length,
             view: camera.view(),
@@ -111,7 +151,7 @@ resl({
         drawOutlines(vertices.map(function (v) {
           return {
             distance: camera.distance, 
-            color: state.color,
+            color: [0.2, 0.2, 0.2],
             vertices: v,
             count: v.length,
             view: camera.view(),

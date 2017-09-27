@@ -5,12 +5,13 @@ module.exports = function (regl) {
     vert: `
     precision mediump float;
     attribute vec2 position;
+    attribute vec3 color;
+    attribute float size;
     uniform float distance;
-    uniform vec3 color;
     uniform mat4 projection, view;
     varying vec3 fragColor;
     void main() {
-      gl_PointSize = 30.0 / pow(distance, 2.5);
+      gl_PointSize = size * 10.0 / pow(distance, 2.5);
       gl_Position = projection * view * vec4(position.x, -position.y, 0, 1);
       fragColor = color;
     }`,
@@ -26,11 +27,12 @@ module.exports = function (regl) {
     }`,
 
     attributes: {
-      position: regl.prop('positions')
+      position: regl.prop('positions'),
+      color: regl.prop('colors'),
+      size: regl.prop('sizes')
     },
 
     uniforms: {
-      color: regl.prop('color'),
       distance: regl.prop('distance'),
       view: regl.prop('view'),
       projection: (context, props) =>
