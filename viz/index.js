@@ -17,6 +17,7 @@ window.addEventListener('resize', fit(canvas), false)
 // import draw functions
 const drawBackground = require('./draw/background')(regl)
 const drawSpots = require('./draw/spots')(regl)
+const drawCircles = require('./draw/circles')(regl)
 const drawRegions = require('./draw/regions')(regl)
 const drawOutlines = require('./draw/outlines')(regl)
 
@@ -52,30 +53,33 @@ resl({
     const top = _.map(_.orderBy(counts, 'count', 'desc'), 
       function (k) {return k.gene}).slice(1,10)
 
-    // setup control panel and state
+    const colorscale = d3scales.scaleOrdinal(d3chromatic.schemeAccent)
+      .domain(top).unknown('#afafaf')
+
     var state = {
       showSpots: true,
-      showRegions: true
+      showRegions: true,
+      showCircles: false,
+      geneSelection: _.fill(Array(10), true)
     }
-    var inputs = [
-      {type: 'checkbox', label: 'show spots', initial: state.showSpots},
-      {type: 'checkbox', label: 'show regions', initial: state.showRegions}
-    ]
 
-    top.forEach(function (d) {
-      state[d] = true
-      inputs.push({type: 'checkbox', label: d, initial: true})
+    var legend = top.map(function (gene) {
+      return colorscale(gene)
     })
 
-    var panel = control(inputs,
+    var panel = control([
+      {type: 'checkbox', label: 'show spots', initial: state.showSpots},
+      {type: 'checkbox', label: 'show circles', initial: state.showCircles},
+      {type: 'checkbox', label: 'show regions', initial: state.showRegions},
+      {type: 'multibox', label: 'gene selection', names: top, initial: state.geneSelection, colors: legend}
+    ],
       {theme: 'dark', position: 'top-left'}
     )
     panel.on('input', function (data) {
       state.showSpots = data['show spots']
+      state.showCircles = data['show circles']
       state.showRegions = data['show regions']
-      top.forEach(function (d) {
-        state[d] = data[d]
-      })
+      state.geneSelection = data['gene selection']
       colors = getcolors(spots)
     })
 
@@ -95,14 +99,11 @@ resl({
       return spot.properties.radius
     })
 
-    const colorscale = d3scales.scaleOrdinal(d3chromatic.schemeAccent)
-      .domain(top).unknown('#939393')
-
     const getcolors = function (spots) {
       var base, scaled
-      return spots.map(function (spot) {
-        if (!state[spot.properties.gene]) {
-          base = '#939393'
+      return spots.map(function (spot, i) {
+        if (!state.geneSelection[_.indexOf(top, spot.properties.gene)]) {
+          base = '#afafaf'
         } else {
           base = colorscale(spot.properties.gene)
         }
@@ -120,6 +121,18 @@ resl({
   
       if (state.showSpots) {
         drawSpots({
+          distance: camera.distance, 
+          colors: colors,
+          sizes: sizes,
+          positions: positions,
+          count: positions.length,
+          view: camera.view(),
+          scale: scale
+        })
+      }
+
+      if (state.showCircles) {
+        drawCircles({
           distance: camera.distance, 
           colors: colors,
           sizes: sizes,
