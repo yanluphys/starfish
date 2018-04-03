@@ -41,7 +41,18 @@ class ImageStack(ImageBase):
             c = data_dict['ch']
             fname = data_dict['file']
             im = tile_format.reader_func(os.path.join(base_path, fname))
-            data[h, c, :] = im
+            if len(tile_shape) > 2:
+                z = data_dict['z']
+                try:
+                    data[h, c, :, :, z] = im
+                except:
+                    print(data_dict)
+                    print(data.shape)
+                    print(h, c, z)
+                    print(data[h, c, :, :, z].shape)
+                    raise
+            else:
+                data[h, c, :] = im
 
         return ImageStack(data, tile_format, num_hybs, num_chs, tile_shape)
 
