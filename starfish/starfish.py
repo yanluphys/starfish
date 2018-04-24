@@ -11,7 +11,7 @@ try:
 except ImportError:
     from profile import Stats  # python 2.x
 
-
+from .image import Indices
 from .pipeline import registration
 from .pipeline.decoder import Decoder
 from .util.argparse import FsExistsType
@@ -131,7 +131,7 @@ def filter(args, print_help=False):
 
     print("Writing results ...")
     # create a 'stain' for segmentation
-    stain = np.mean(s.max_proj('ch'), axis=0)
+    stain = np.mean(s.max_proj(Indices.CH), axis=0)
     stain = stain / stain.max()
 
     # update stack
