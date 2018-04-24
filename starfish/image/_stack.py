@@ -8,6 +8,13 @@ from ._constants import Coordinates, Indices
 
 
 class ImageStack(ImageBase):
+    INDEX_MAP = {
+        Indices.HYB: 0,
+        Indices.CH: 1,
+        Indices.Z: 2,
+    }
+    MAX_INDEX = max(INDEX_MAP.values()) + 1
+
     def __init__(self, image_partition):
         self._image_partition = image_partition
         self._num_hybs = image_partition.get_dimension_shape(Indices.HYB)
@@ -25,7 +32,7 @@ class ImageStack(ImageBase):
             h = tile.indices[Indices.HYB]
             c = tile.indices[Indices.CH]
             zlayer = tile.indices.get(Indices.Z, 0)
-            self._data[h, c, zlayer, :] = tile.numpy_array
+            self.set_slice(indices={Indices.HYB: h, Indices.CH: c, Indices.Z: zlayer}, data=tile.numpy_array)
 
     @classmethod
     def from_image_stack(cls, image_stack_name_or_url, baseurl):
@@ -44,6 +51,23 @@ class ImageStack(ImageBase):
         self._data = data.view()
         self._data_needs_writeback = True
         data.setflags(write=False)
+
+    def slice(self, indices):
+        slice_list = [slice(None, None, None) for _ in range(ImageStack.MAX_INDEX)]
+        for name, val in indices.items():
+            idx = ImageStack.INDEX_MAP[name]
+            slice_list[idx] = val
+        result = self._data[tuple(slice_list)]
+        result.setflags(write=False)
+        return result
+
+    def set_slice(self, indices, data):
+        slice_list = [slice(None, None, None) for _ in range(ImageStack.MAX_INDEX)]
+        for name, val in indices.items():
+            idx = ImageStack.INDEX_MAP[name]
+            slice_list[idx] = val
+        self._data[tuple(slice_list)] = data
+        self._data_needs_writeback = True
 
     @property
     def shape(self):
@@ -74,7 +98,7 @@ class ImageStack(ImageBase):
                 h = tile.indices[Indices.HYB]
                 c = tile.indices[Indices.CH]
                 zlayer = tile.indices.get(Indices.Z, 0)
-                tile.numpy_array = self._data[h, c, zlayer, :]
+                tile.numpy_array = self.slice(indices={Indices.HYB: h, Indices.CH: c, Indices.Z: zlayer})
             self._data_needs_writeback = False
 
         seen_x_coords, seen_y_coords, seen_z_coords = set(), set(), set()
@@ -126,16 +150,12 @@ class ImageStack(ImageBase):
             tile_opener=tile_opener)
 
     def max_proj(self, *dims):
-        valid_dims = {
-            Indices.HYB: 0,
-            Indices.CH: 1,
-            Indices.Z: 2,
-        }
         axes = list()
         for dim in dims:
             try:
-                axes.append(valid_dims[dim])
+                axes.append(ImageStack.INDEX_MAP[dim])
             except KeyError:
-                raise ValueError("Dimension: {} not supported. Expecting one of: {}".format(dim, valid_dims.keys()))
+                raise ValueError(
+                    "Dimension: {} not supported. Expecting one of: {}".format(dim, ImageStack.INDEX_MAP.keys()))
 
         return numpy.max(self._data, axis=tuple(axes))
