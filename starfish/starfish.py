@@ -120,23 +120,21 @@ def filter(args, print_help=False):
     print("Filtering dots ...")
     dots_filt = white_top_hat(s.aux_dict['dots'], args.ds)
 
-    print("Writing results ...")
     # create a 'stain' for segmentation
     # TODO: (ambrosejcarr) is this the appropriate way of dealing with Z in stain generation?
     stain = np.mean(s.max_proj(Indices.CH, Indices.Z), axis=0)
     stain = stain / stain.max()
-
-    res = np.zeros(s.image.shape)
 
     # filter raw images, for all hybs, channels
     for hyb in range(s.image.num_hybs):
         for ch in range(s.image.num_chs):
             for zlayer in range(s.image.num_zlayers):
                 print("Filtering image: hyb={} ch={} zlayer={}...".format(hyb, ch, zlayer))
-                res[hyb, ch, zlayer, :, :] = white_top_hat(s.image.numpy_array[hyb, ch, zlayer, :, :], args.ds)
+                indices = {Indices.HYB: hyb, Indices.CH: ch, Indices.Z: zlayer}
+                result = white_top_hat(s.image.slice(indices=indices), args.ds)
+                s.image.set_slice(indices=indices, data=result)
 
-    # update stack
-    s.set_stack(res)
+    print("Writing results ...")
     s.set_aux('dots', dots_filt)
     s.set_aux('stain', stain)
 
